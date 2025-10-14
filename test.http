@@ -1,0 +1,42 @@
+### LNURLw Server Test Requests
+
+# Set variables
+@baseUrl = http://localhost:8080
+@domain = localhost:8080
+
+### 1. Create a new bolt card
+POST {{baseUrl}}/api/createboltcard
+Content-Type: application/json
+
+{
+  "card_name": "Test Card 1",
+  "tx_limit_sats": 50000,
+  "day_limit_sats": 500000,
+  "enabled": true
+}
+
+### 2. Create another card with minimal config
+POST {{baseUrl}}/api/createboltcard
+Content-Type: application/json
+
+{
+  "card_name": "Basic Card"
+}
+
+### 3. Get card registration info (replace 'YOUR_ONE_TIME_CODE' with actual code from step 1 response)
+GET {{baseUrl}}/new?a=e6c8971ca5bae188233c523bf6869c37
+
+### 4. Test LNURLw endpoint with dummy data (this will fail validation but shows the error handling)
+GET {{baseUrl}}/ln?p=1234567890abcdef1234567890abcdef&c=1234567890abcdef
+
+### 5. Test LNURLw callback with dummy data (this will also fail but shows error handling)
+GET {{baseUrl}}/ln/callback?k1=dummy_k1&pr=lnbc1000n1p1234567890
+
+### Example flow after card creation:
+# 1. Run the "Create a new bolt card" request
+# 2. Copy the one_time_code from the "url" field in the response
+# 3. Replace YOUR_ONE_TIME_CODE in step 3 with the actual code
+# 4. Run the registration request to get the card keys for NFC programming
+
+### Health check (optional - server doesn't implement this but shows 404)
+GET {{baseUrl}}/health

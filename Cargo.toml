@@ -1,0 +1,26 @@
+[package]
+name = "lnurlw-server"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+aes = "0.8.4"
+anyhow = "1.0.100"
+async-trait = "0.1.89"
+axum = "0.8.4"
+chrono = { version = "0.4.42", features = ["serde"] }
+cipher = "0.4.4"
+clap = { version = "4.5.48", features = ["derive", "env"] }
+cmac = "0.7.2"
+hex = "0.4.3"
+lightning-invoice = "0.33.2"
+rand = "0.9.2"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "migrate"] }
+thiserror = "2.0.16"
+tokio = { version = "1.47.1", features = ["full"] }
+tower = "0.5.2"
+tower-http = { version = "0.6.6", features = ["trace"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }

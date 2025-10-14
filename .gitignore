@@ -1,0 +1,10 @@
+.direnv/
+.devenv/
+result
+result-*
+
+# Added by cargo
+
+/target
+/boltcard
+/lnurlw.db
