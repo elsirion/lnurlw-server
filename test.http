@@ -1,8 +1,8 @@
 ### LNURLw Server Test Requests
 
 # Set variables
-@baseUrl = http://localhost:8080
-@domain = localhost:8080
+@baseUrl = https://lnurlw.sirion.io
+@domain = lnurlw.sirion.io
 
 ### 1. Create a new bolt card
 POST {{baseUrl}}/api/createboltcard
@@ -27,7 +27,7 @@ Content-Type: application/json
 GET {{baseUrl}}/new?a=e6c8971ca5bae188233c523bf6869c37
 
 ### 4. Test LNURLw endpoint with dummy data (this will fail validation but shows the error handling)
-GET {{baseUrl}}/ln?p=1234567890abcdef1234567890abcdef&c=1234567890abcdef
+GET {{baseUrl}}/ln?card_id=1&p=1234567890abcdef1234567890abcdef&c=1234567890abcdef
 
 ### 5. Test LNURLw callback with dummy data (this will also fail but shows error handling)
 GET {{baseUrl}}/ln/callback?k1=dummy_k1&pr=lnbc1000n1p1234567890

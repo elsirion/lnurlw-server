@@ -62,7 +62,7 @@ CREATE TABLE card_payments (
 - Parameters: card_name, tx_max, day_max, enabled, uid_privacy
 
 ### C. LNURLw Endpoint
-`GET /ln?p={encrypted_data}&c={cmac}`
+`GET /ln?card_id={card_id}&p={encrypted_data}&c={cmac}`
 - Decrypts UID and counter from `p` parameter using card-specific k1
 - Validates CMAC authentication using card-specific k2
 - Checks counter is increasing (replay protection)
@@ -94,7 +94,7 @@ struct Config {
     host: String,           // default: "0.0.0.0"
     port: u16,             // default: 8080
     domain: String,        // public domain for lnurlw URLs
-    
+
     // Database
     database_url: String,  // SQLite path
 }
@@ -161,8 +161,8 @@ rand = "0.8"  # For key generation
 
 2. **Payment Flow**:
    - Card tapped on POS terminal
-   - POS reads NDEF message: `lnurlw://domain/ln?p={encrypted}&c={cmac}`
-   - Server tries to decrypt `p` with each card's k1 to find matching card
+   - POS reads NDEF message: `lnurlw://domain/ln?card_id={card_id}&p={encrypted}&c={cmac}`
+   - Server looks up card by ID and decrypts `p` with that card's k1
    - Server validates CMAC with that card's k2
    - Server checks counter > last_counter for that card
    - Server returns LNURLw response with callback URL

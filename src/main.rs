@@ -4,6 +4,7 @@ mod crypto;
 mod db;
 mod handlers;
 mod lightning;
+mod validation;
 
 use axum::{
     routing::{get, post},
@@ -34,20 +35,20 @@ async fn main() -> anyhow::Result<()> {
 
     // Parse configuration
     let config = Arc::new(Config::parse());
-    
+
     // Initialize database
     let pool = init_pool(&config.database_url).await?;
-    
+
     // Initialize Lightning backend (using mock for now)
     let lightning: Arc<dyn lightning::LightningBackend> = Arc::new(MockLightning);
-    
+
     // Create shared state
     let state = AppState {
         pool,
         config: config.clone(),
         lightning,
     };
-    
+
     // Build router
     let app = Router::new()
         // LNURLw endpoints
@@ -66,12 +67,12 @@ async fn main() -> anyhow::Result<()> {
 
     // Start server
     let listener = tokio::net::TcpListener::bind(&config.socket_addr()).await?;
-    
+
     tracing::info!("Server running on {}", config.socket_addr());
     tracing::info!("Domain: {}", config.domain);
     tracing::info!("LNURLw base: {}", config.lnurlw_base());
-    
+
     axum::serve(listener, app).await?;
-    
+
     Ok(())
 }

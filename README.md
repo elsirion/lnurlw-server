@@ -95,7 +95,7 @@ Response (for NFC programming):
 
 #### Initial Request
 ```http
-GET /ln?p=<encrypted_data>&c=<cmac>
+GET /ln?card_id=<card_id>&p=<encrypted_data>&c=<cmac>
 ```
 
 #### Callback
@@ -149,7 +149,7 @@ impl LightningBackend for MyLightningBackend {
     async fn pay_invoice(&self, invoice: &Invoice, expected_amount_msats: u64) -> Result<PaymentResult> {
         // Implement Lightning payment logic
     }
-    
+
     async fn get_info(&self) -> Result<NodeInfo> {
         // Implement node info retrieval
     }

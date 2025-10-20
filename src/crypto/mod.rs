@@ -1,5 +1,5 @@
 use aes::Aes128;
-use cipher::{BlockDecrypt, KeyInit};
+use cipher::{KeyInit, BlockDecryptMut, generic_array::GenericArray};
 use cmac::{Cmac, Mac};
 use hex;
 use anyhow::{Result, anyhow};
@@ -15,7 +15,7 @@ impl AesKey {
         let bytes: [u8; 16] = rand::random();
         Self(bytes)
     }
-    
+
     pub fn from_hex(s: &str) -> Result<Self> {
         let bytes = hex::decode(s)?;
         if bytes.len() != 16 {
@@ -25,7 +25,7 @@ impl AesKey {
         arr.copy_from_slice(&bytes);
         Ok(Self(arr))
     }
-    
+
     pub fn as_bytes(&self) -> &[u8; 16] {
         &self.0
     }
@@ -69,12 +69,12 @@ impl CardUid {
         arr.copy_from_slice(bytes);
         Ok(Self(arr))
     }
-    
+
     pub fn from_hex(s: &str) -> Result<Self> {
         let bytes = hex::decode(s)?;
         Self::from_bytes(&bytes)
     }
-    
+
     pub fn as_bytes(&self) -> &[u8; 7] {
         &self.0
     }
@@ -113,18 +113,18 @@ impl Counter {
     pub fn new(value: u32) -> Self {
         Self(value)
     }
-    
+
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         if bytes.len() != 3 {
             return Err(anyhow!("Counter must be 3 bytes"));
         }
         // Little-endian
-        let value = u32::from(bytes[2]) << 16 
-                  | u32::from(bytes[1]) << 8 
-                  | u32::from(bytes[0]);
+        let value = u32::from(bytes[2])
+                  | u32::from(bytes[1]) << 8
+                  | u32::from(bytes[0]) << 16;
         Ok(Self(value))
     }
-    
+
     pub fn to_bytes(&self) -> [u8; 3] {
         [
             (self.0 & 0xFF) as u8,
@@ -132,7 +132,7 @@ impl Counter {
             ((self.0 >> 16) & 0xFF) as u8,
         ]
     }
-    
+
     pub fn value(&self) -> u32 {
         self.0
     }
@@ -148,12 +148,22 @@ pub fn aes_decrypt(key: &AesKey, ciphertext: &[u8]) -> Result<Vec<u8>> {
     if ciphertext.len() != 16 {
         return Err(anyhow!("Ciphertext must be 16 bytes"));
     }
-    
-    let cipher = Aes128::new_from_slice(key.as_bytes()).map_err(|e| anyhow!("Invalid key length: {:?}", e))?;
+
+    // Use CBC mode with zero IV like the Go implementation
+    let mut cipher = Aes128::new_from_slice(key.as_bytes()).map_err(|e| anyhow!("Invalid key length: {:?}", e))?;
+    let iv = [0u8; 16]; // Zero IV
+
     let mut block = [0u8; 16];
     block.copy_from_slice(ciphertext);
-    
-    cipher.decrypt_block((&mut block).into());
+
+    // CBC decryption: decrypt first, then XOR with IV
+    cipher.decrypt_block_mut(GenericArray::from_mut_slice(&mut block));
+
+    // XOR with IV (which is zero, so this is a no-op, but keeping for clarity)
+    for i in 0..16 {
+        block[i] ^= iv[i];
+    }
+
     Ok(block.to_vec())
 }
 
@@ -161,7 +171,7 @@ pub fn verify_cmac(key: &AesKey, uid: &CardUid, counter: &Counter, expected_cmac
     if expected_cmac.len() != 8 {
         return Err(anyhow!("CMAC must be 8 bytes"));
     }
-    
+
     // Build SV2 data structure for CMAC
     let mut sv2 = [0u8; 16];
     sv2[0] = 0x3c;
@@ -173,31 +183,50 @@ pub fn verify_cmac(key: &AesKey, uid: &CardUid, counter: &Counter, expected_cmac
     sv2[6..13].copy_from_slice(uid.as_bytes());
     let counter_bytes = counter.to_bytes();
     sv2[13..16].copy_from_slice(&counter_bytes);
-    
-    let mut mac = <Cmac<Aes128> as Mac>::new_from_slice(key.as_bytes()).map_err(|e| anyhow!("Invalid key length: {:?}", e))?;
-    mac.update(&sv2);
-    let result = mac.finalize();
-    let computed = result.into_bytes();
-    
-    // Compare first 8 bytes of computed CMAC with expected
-    Ok(computed[..8] == *expected_cmac)
+
+    // First CMAC: compute ks using key and sv2
+    let mut mac1 = <Cmac<Aes128> as Mac>::new_from_slice(key.as_bytes()).map_err(|e| anyhow!("Invalid key length: {:?}", e))?;
+    mac1.update(&sv2);
+    let result1 = mac1.finalize();
+    let ks = result1.into_bytes();
+
+    // Second CMAC: compute cm using ks as key and empty data
+    let mut mac2 = <Cmac<Aes128> as Mac>::new_from_slice(&ks).map_err(|e| anyhow!("Invalid key length: {:?}", e))?;
+    mac2.update(&[]);
+    let result2 = mac2.finalize();
+    let cm = result2.into_bytes();
+
+    // Extract specific bytes from cm to get final CMAC (like Go implementation)
+    let mut ct = [0u8; 8];
+    ct[0] = cm[1];
+    ct[1] = cm[3];
+    ct[2] = cm[5];
+    ct[3] = cm[7];
+    ct[4] = cm[9];
+    ct[5] = cm[11];
+    ct[6] = cm[13];
+    ct[7] = cm[15];
+
+    // Compare computed CMAC with expected
+    Ok(ct == *expected_cmac)
 }
 
 pub fn parse_decrypted_data(decrypted: &[u8]) -> Result<(CardUid, Counter)> {
     if decrypted.len() != 16 {
         return Err(anyhow!("Decrypted data must be 16 bytes"));
     }
-    
+
     // Check for 0xC7 prefix
     if decrypted[0] != 0xC7 {
         return Err(anyhow!("Invalid decrypted data format"));
     }
-    
+
     // Extract UID (7 bytes)
     let uid = CardUid::from_bytes(&decrypted[1..8])?;
-    
-    // Extract counter (3 bytes at positions 8,9,10)
-    let counter = Counter::from_bytes(&decrypted[8..11])?;
-    
+
+    // Extract counter (3 bytes at positions 8,9,10) - Go implementation uses reverse order
+    let counter_bytes = [decrypted[10], decrypted[9], decrypted[8]];
+    let counter = Counter::from_bytes(&counter_bytes)?;
+
     Ok((uid, counter))
 }
